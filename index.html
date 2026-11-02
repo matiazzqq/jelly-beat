@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DEEP ABYSS: Jelly Beat</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#0a0020;
+  overflow:hidden;
+  font-family:'Segoe UI',Arial,sans-serif;
+  color:#fff;
+  touch-action:none;
+  user-select:none;
+  -webkit-user-select:none;
+}
+canvas{display:block;cursor:pointer}
+
+#ui{
+  position:absolute;inset:0;
+  pointer-events:none;
+  z-index:10;
+  display:flex;flex-direction:column;
+  justify-content:space-between;
+  padding:14px;
+}
+.top-bar{
+  display:flex;justify-content:space-between;
+  flex-wrap:wrap;gap:8px;align-items:flex-start;
+}
+.stat{
+  background:rgba(20,0,40,.7);
+  border:1px solid rgba(186,104,200,.4);
+  padding:8px 14px;
+  border-radius:10px;
+  font-size:15px;font-weight:bold;
+  backdrop-filter:blur(5px);
+}
+.stat span{color:#ce93d8}
+.stat.score span{color:#00e5ff}
+
+.energy-wrap{width:min(240px,40vw)}
+.energy-label{font-size:12px;color:#ce93d8;margin-bottom:3px}
+.energy-bar{
+  width:100%;height:14px;
+  background:rgba(0,0,0,.6);
+  border:1px solid #ce93d8;
+  border-radius:7px;overflow:hidden;
+}
+.energy-fill{
+  height:100%;width:50%;
+  background:linear-gradient(90deg,#ba68c8,#f06292);
+  transition:width .2s;
+}
+.energy-fill.low{background:linear-gradient(90deg,#ff5555,#ff9955)}
+
+#combo{
+  position:absolute;top:38%;left:50%;
+  transform:translate(-50%,-50%);
+  font-size:min(14vw,70px);
+  font-weight:900;
+  color:rgba(0,229,255,.85);
+  text-shadow:0 0 25px rgba(0,229,255,.6);
+  pointer-events:none;
+  opacity:0;
+  transition:opacity .2s;
+}
+#combo.show{opacity:1}
+
+.bottom-hint{
+  text-align:center;
+  color:rgba(206,147,216,.4);
+  font-size:12px;padding-bottom:4px;
+}
+
+.menu{
+  position:absolute;inset:0;
+  z-index:100;
+  background:radial-gradient(circle at 50% 40%, rgba(40,0,70,.8), rgba(10,0,25,.96) 70%);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  text-align:center;padding:24px;
+  pointer-events:auto;
+  visibility:visible;opacity:1;
+  transition:opacity .25s;
+}
+.hidden{
+  visibility:hidden!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+h1{
+  font-size:min(12vw,60px);
+  letter-spacing:3px;color:#fff;
+  text-shadow:0 0 20px rgba(186,104,200,.7),0 0 50px rgba(0,229,255,.3);
+  margin-bottom:10px;
+}
+p{color:#c8a0d8;font-size:16px;line-height:1.6;margin-bottom:22px;max-width:540px}
+.btn-row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-bottom:10px}
+.btn{
+  padding:14px 34px;font-size:18px;font-weight:900;
+  border:none;outline:none;border-radius:999px;
+  color:#1a0030;
+  background:linear-gradient(135deg,#ba68c8,#00e5ff);
+  box-shadow:0 10px 30px rgba(186,104,200,.35);
+  cursor:pointer;transition:transform .18s;
+  pointer-events:auto;
+}
+.btn:hover{transform:scale(1.05)}
+.btn.sec{
+  background:transparent;
+  border:2px solid #ba68c8;
+  color:#ce93d8;
+  box-shadow:none;
+}
+.btn.sec:hover{background:rgba(186,104,200,.15)}
+.final-score{font-size:44px;color:#00e5ff;margin:14px 0;text-shadow:0 0 20px rgba(0,229,255,.6)}
+.grade{font-size:80px;font-weight:900;margin:0 0 10px}
+.stats-list{list-style:none;margin:0 0 20px;font-size:17px;color:#c8a0d8}
+.stats-list li{margin:6px 0}
+.stats-list span{color:#00e5ff;font-weight:900}
+.hint{margin-top:16px;font-size:13px;color:#6a4a7a}
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <div class="top-bar">
+    <div class="stat score">Очки: <span id="scoreVal">0</span></div>
+    <div class="stat">Комбо: <span id="comboVal">0</span></div>
+    <div class="stat">🎐 <span id="noteVal">0/0</span></div>
+    <div class="stat energy-wrap">
+      <div class="energy-label">ЭНЕРГИЯ</div>
+      <div class="energy-bar"><div class="energy-fill" id="energyFill"></div></div>
+    </div>
+  </div>
+  <div class="bottom-hint">Тапай по медузе, когда кольцо совпадёт с её телом. Держи ритм!</div>
+</div>
+
+<div id="combo"></div>
+
+<div id="startMenu" class="menu">
+  <h1>JELLY BEAT</h1>
+  <p>
+    Медузы пульсируют в ритм глубин DEEP ABYSS.<br>
+    Вокруг каждой сжимается кольцо-таймер.<br>
+    Тапни ровно в момент совпадения — и держи комбо.<br><br>
+    PERFECT +100 | GOOD +50 | MISS — слив энергии
+  </p>
+  <div class="btn-row">
+    <button class="btn sec" data-diff="0">ЛЁГКИЙ</button>
+    <button class="btn" data-diff="1">СРЕДНИЙ</button>
+    <button class="btn sec" data-diff="2">ХАРД</button>
+  </div>
+  <div class="hint">90 / 110 / 130 BPM. Чем выше темп, тем ценнее комбо.</div>
+</div>
+
+<div id="overMenu" class="menu hidden">
+  <div class="grade" id="gradeVal">S</div>
+  <h1 id="overTitle">ТРЕК ЗАВЕРШЁН</h1>
+  <div class="final-score" id="finalScore">0</div>
+  <ul class="stats-list">
+    <li>Perfect: <span id="stPerfect">0</span></li>
+    <li>Good: <span id="stGood">0</span></li>
+    <li>Miss: <span id="stMiss">0</span></li>
+    <li>Макс. комбо: <span id="stCombo">0</span></li>
+  </ul>
+  <button class="btn" id="btnAgain">ЕЩЁ РАЗ 🎐</button>
+</div>
+
+<script>
+// ==== AUDIO: процедурный бит ====
+let audioCtx=null;
+function initAudio(){
+  if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended')audioCtx.resume();
+}
+function kick(t){
+  if(!audioCtx)return;
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type='sine';
+  o.frequency.setValueAtTime(150,t);
+  o.frequency.exponentialRampToValueAtTime(40,t+0.12);
+  g.gain.setValueAtTime(0.5,t);
+  g.gain.exponentialRampToValueAtTime(0.001,t+0.15);
+  o.connect(g);g.connect(audioCtx.destination);
+  o.start(t);o.stop(t+0.16);
+}
+function hat(t){
+  if(!audioCtx)return;
+  const bs=audioCtx.sampleRate*0.05;
+  const buf=audioCtx.createBuffer(1,bs,audioCtx.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<bs;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/bs,3);
+  const src=audioCtx.createBufferSource();src.buffer=buf;
+  const f=audioCtx.createBiquadFilter();f.type='highpass';f.frequency.value=6000;
+  const g=audioCtx.createGain();g.gain.setValueAtTime(0.15,t);
+  g.gain.exponentialRampToValueAtTime(0.001,t+0.05);
+  src.connect(f);f.connect(g);g.connect(audioCtx.destination);
+  src.start(t);
+}
+function bass(t,freq){
+  if(!audioCtx)return;
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type='sawtooth';o.frequency.setValueAtTime(freq,t);
+  const f=audioCtx.createBiquadFilter();f.type='lowpass';f.frequency.value=400;
+  g.gain.setValueAtTime(0.12,t);
+  g.gain.exponentialRampToValueAtTime(0.001,t+0.3);
+  o.connect(f);f.connect(g);g.connect(audioCtx.destination);
+  o.start(t);o.stop(t+0.32);
+}
+function sfxHit(kind){
+  if(!audioCtx)return;
+  const t=audioCtx.currentTime;
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  if(kind==='perfect'){o.type='sine';o.frequency.setValueAtTime(1200,t);o.frequency.setValueAtTime(1800,t+0.05);}
+  else if(kind==='good'){o.type='sine';o.frequency.setValueAtTime(800,t);}
+  else{o.type='sawtooth';o.frequency.setValueAtTime(150,t);}
+  g.gain.setValueAtTime(kind==='miss'?0.15:0.12,t);
+  g.gain.exponentialRampToValueAtTime(0.001,t+0.15);
+  o.connect(g);g.connect(audioCtx.destination);
+  o.start(t);o.stop(t+0.16);
+}
+
+// ==== CANVAS ====
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const PI2=Math.PI*2;
+let W=0,H=0;
+function resize(){
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=W;canvas.height=H;
+}
+window.addEventListener('resize',resize);
+
+// ==== DOM ====
+const scoreVal=document.getElementById('scoreVal');
+const comboVal=document.getElementById('comboVal');
+const noteVal=document.getElementById('noteVal');
+const energyFill=document.getElementById('energyFill');
+const comboEl=document.getElementById('combo');
+const startMenu=document.getElementById('startMenu');
+const overMenu=document.getElementById('overMenu');
+const gradeVal=document.getElementById('gradeVal');
+const overTitle=document.getElementById('overTitle');
+const finalScore=document.getElementById('finalScore');
+const stPerfect=document.getElementById('stPerfect');
+const stGood=document.getElementById('stGood');
+const stMiss=document.getElementById('stMiss');
+const stCombo=document.getElementById('stCombo');
+const btnAgain=document.getElementById('btnAgain');
+
+// ==== DIFFICULTY ====
+const DIFFS=[
+  {name:'ЛЁГКИЙ',bpm:90,notes:28,density:0.55,half:0},
+  {name:'СРЕДНИЙ',bpm:110,notes:40,density:0.8,half:0.15},
+  {name:'ХАРД',bpm:130,notes:52,density:1.0,half:0.35}
+];
+
+// ==== STATE ====
+const game={
+  playing:false,rafId:null,lastTime:0,
+  diff:1,
+  songTime:0,beatInterval:0.6,approach:1.2,
+  nextBeat:0,beatCount:0,
+  jellies:[],particles:[],floats:[],
+  score:0,combo:0,maxCombo:0,energy:50,
+  spawned:0,totalNotes:0,
+  perfect:0,good:0,miss:0,
+  pulse:0, // визуальная пульсация фона на kick
+  bubbles:[]
+};
+
+const PERFECT_WIN=0.09;
+const GOOD_WIN=0.20;
+
+// ==== SPAWN ====
+function spawnJelly(hitTime){
+  const margin=70;
+  const x=margin+Math.random()*(W-margin*2);
+  const y=margin+60+Math.random()*(H-margin*2-80);
+  game.jellies.push({
+    x:x,y:y,
+    spawnTime:hitTime-game.approach,
+    hitTime:hitTime,
+    size:34,
+    state:'live', // live | hit | gone
+    hue:Math.random()<0.5?285:190,
+    phase:Math.random()*PI2
+  });
+}
+
+// ==== UPDATE ====
+function update(dt){
+  game.songTime+=dt;
+
+  // бит-планировщик
+  while(game.songTime>=game.nextBeat){
+    const t=audioCtx?audioCtx.currentTime:0;
+    kick(t);
+    if(audioCtx){hat(t+game.beatInterval/2);}
+    if(game.beatCount%4===0)bass(t,[55,65,49,58][Math.floor(game.beatCount/4)%4]);
+    game.pulse=1;
+
+    // спавн медуз по плотности
+    if(game.spawned<game.totalNotes){
+      const onBeat=Math.random()<game_diff().density;
+      if(onBeat){
+        spawnJelly(game.nextBeat+game.approach);
+        game.spawned++;
+      }else if(Math.random()<game_diff().half&&game.spawned<game.totalNotes){
+        spawnJelly(game.nextBeat+game.beatInterval/2+game.approach);
+        game.spawned++;
+      }
+    }
+
+    game.beatCount++;
+    game.nextBeat+=game.beatInterval;
+  }
+
+  game.pulse*=0.9;
+
+  // медузы: проверка miss
+  for(let i=game.jellies.length-1;i>=0;i--){
+    const j=game.jellies[i];
+    if(j.state==='live'&&game.songTime>j.hitTime+GOOD_WIN){
+      j.state='gone';
+      registerMiss(j);
+      game.jellies.splice(i,1);
+    }
+  }
+
+  // частицы/текст
+  for(let i=game.particles.length-1;i>=0;i--){
+    const p=game.particles[i];
+    p.x+=p.vx*dt*60;p.y+=p.vy*dt*60;p.life-=dt*1.4;
+    if(p.life<=0)game.particles.splice(i,1);
+  }
+  for(let i=game.floats.length-1;i>=0;i--){
+    const f=game.floats[i];
+    f.y+=f.vy*dt;f.life-=dt*1.1;
+    if(f.life<=0)game.floats.splice(i,1);
+  }
+
+  // пузырьки
+  if(Math.random()<0.15)game.bubbles.push({x:Math.random()*W,y:H+10,r:2+Math.random()*4,s:0.6+Math.random()});
+  for(let i=game.bubbles.length-1;i>=0;i--){
+    const b=game.bubbles[i];
+    b.y-=b.s*dt*60;
+    if(b.y<-10)game.bubbles.splice(i,1);
+  }
+
+  // конец трека
+  if(game.spawned>=game.totalNotes&&game.jellies.length===0){
+    endSong(true);
+    return;
+  }
+  if(game.frameCount===undefined)game.frameCount=0;
+  game.frameCount++;
+  if(game.frameCount%6===0)updateHUD();
+}
+
+function game_diff(){return DIFFS[game.diff]}
+
+// ==== HIT ====
+function tryHit(px,py){
+  if(!game.playing)return;
+  // найти ближайшую живую медузу под точкой
+  let best=null,bestD=1e9;
+  for(const j of game.jellies){
+    if(j.state!=='live')continue;
+    const d=Math.hypot(j.x-px,j.y-py);
+    if(d<j.size+26&&d<bestD){best=j;bestD=d}
+  }
+  if(!best)return;
+
+  const diff=game.songTime-best.hitTime;
+  const ad=Math.abs(diff);
+
+  if(ad<=PERFECT_WIN){
+    best.state='hit';
+    game.jellies.splice(game.jellies.indexOf(best),1);
+    game.perfect++;
+    addCombo();
+    const mult=1+Math.min(game.combo,40)*0.05;
+    const pts=Math.round(100*mult);
+    game.score+=pts;
+    game.energy=Math.min(100,game.energy+3);
+    sfxHit('perfect');
+    burst(best.x,best.y,'#00e5ff',18);
+    float(best.x,best.y,'PERFECT +'+pts,'#00e5ff',22);
+  }else if(ad<=GOOD_WIN){
+    best.state='hit';
+    game.jellies.splice(game.jellies.indexOf(best),1);
+    game.good++;
+    addCombo();
+    const mult=1+Math.min(game.combo,40)*0.05;
+    const pts=Math.round(50*mult);
+    game.score+=pts;
+    game.energy=Math.min(100,game.energy+1);
+    sfxHit('good');
+    burst(best.x,best.y,'#ba68c8',10);
+    float(best.x,best.y,'GOOD +'+pts,'#ce93d8',18);
+  }else if(diff<0&&ad<=GOOD_WIN*2){
+    // слишком рано, но близко — штраф комбо, медуза остаётся
+    breakCombo();
+    sfxHit('miss');
+    float(best.x,best.y,'РАНО','#ff9955',16);
+  }
+  // если кликнул очень рано — игнорируем
+  updateHUD();
+}
+
+function addCombo(){
+  game.combo++;
+  if(game.combo>game.maxCombo)game.maxCombo=game.combo;
+  comboEl.textContent=game.combo+'x';
+  comboEl.classList.add('show');
+  clearTimeout(comboEl._t);
+  comboEl._t=setTimeout(()=>comboEl.classList.remove('show'),700);
+}
+function breakCombo(){game.combo=0}
+
+function registerMiss(j){
+  game.miss++;
+  breakCombo();
+  game.energy=Math.max(0,game.energy-12);
+  sfxHit('miss');
+  burst(j.x,j.y,'#ff5555',8);
+  float(j.x,j.y,'MISS','#ff6b8a',18);
+  updateHUD();
+  if(game.energy<=0)endSong(false);
+}
+
+function burst(x,y,c,n){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*PI2,s=2+Math.random()*5;
+    game.particles.push({x:x,y:y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,size:2+Math.random()*3,color:c});
+  }
+}
+function float(x,y,t,c,s){game.floats.push({x:x,y:y,text:t,color:c,size:s,life:1,vy:-45})}
+
+// ==== HUD ====
+function updateHUD(){
+  scoreVal.textContent=game.score;
+  comboVal.textContent=game.combo;
+  noteVal.textContent=(game.perfect+game.good+game.miss)+'/'+game.totalNotes;
+  energyFill.style.width=game.energy+'%';
+  energyFill.classList.toggle('low',game.energy<30);
+}
+
+// ==== DRAW ====
+function drawBackground(){
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#1a0035');g.addColorStop(0.5,'#0d0025');g.addColorStop(1,'#050012');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+
+  // пульсация фона на kick
+  if(game.pulse>0.05){
+    ctx.save();
+    ctx.globalAlpha=game.pulse*0.12;
+    const rg=ctx.createRadialGradient(W/2,H/2,50,W/2,H/2,Math.max(W,H)*0.7);
+    rg.addColorStop(0,'#ba68c8');rg.addColorStop(1,'transparent');
+    ctx.fillStyle=rg;ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+
+  for(const b of game.bubbles){
+    ctx.strokeStyle='rgba(186,104,200,.2)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,PI2);ctx.stroke();
+  }
+}
+
+function drawJelly(j){
+  const prog=(game.songTime-j.spawnTime)/game.approach; // 0..1 к удару
+  const pulse=1+Math.sin(game.songTime*6+j.phase)*0.06;
+
+  ctx.save();
+  ctx.translate(j.x,j.y);
+
+  // кольцо-таймер (сжимается к размеру медузы)
+  if(prog>=0&&prog<=1.3){
+    const ringR=j.size*(2.6-1.6*Math.min(1,prog));
+    const close=1-Math.min(1,Math.abs(1-prog));
+    ctx.strokeStyle='hsla('+j.hue+',90%,'+(60+close*30)+'%,'+(0.4+close*0.6)+')';
+    ctx.lineWidth=3+close*2;
+    ctx.shadowBlur=close*15;
+    ctx.shadowColor='hsl('+j.hue+',90%,60%)';
+    ctx.beginPath();ctx.arc(0,0,ringR,0,PI2);ctx.stroke();
+    ctx.shadowBlur=0;
+  }
+
+  // тело медузы
+  const s=j.size*pulse;
+  ctx.fillStyle='hsla('+j.hue+',80%,65%,.75)';
+  ctx.shadowBlur=18;
+  ctx.shadowColor='hsl('+j.hue+',80%,60%)';
+  ctx.beginPath();
+  ctx.arc(0,0,s,Math.PI,0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur=0;
+
+  // купол низ
+  ctx.fillStyle='hsla('+j.hue+',80%,75%,.5)';
+  ctx.beginPath();
+  ctx.ellipse(0,0,s,s*0.25,0,0,PI2);
+  ctx.fill();
+
+  // щупальца
+  ctx.strokeStyle='hsla('+j.hue+',80%,70%,.6)';
+  ctx.lineWidth=2;
+  for(let i=0;i<5;i++){
+    const ox=-s*0.7+i*(s*0.35);
+    ctx.beginPath();
+    ctx.moveTo(ox,2);
+    ctx.quadraticCurveTo(ox+Math.sin(game.songTime*4+i+j.phase)*6,s*0.6,ox,s*1.0);
+    ctx.stroke();
+  }
+
+  // глаза
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(-s*0.25,-s*0.2,s*0.12,0,PI2);ctx.arc(s*0.25,-s*0.2,s*0.12,0,PI2);ctx.fill();
+  ctx.fillStyle='#200030';
+  ctx.beginPath();ctx.arc(-s*0.25,-s*0.2,s*0.05,0,PI2);ctx.arc(s*0.25,-s*0.2,s*0.05,0,PI2);ctx.fill();
+
+  ctx.restore();
+}
+
+function draw(){
+  drawBackground();
+
+  for(const j of game.jellies)drawJelly(j);
+
+  for(const p of game.particles){
+    ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.size*p.life,0,PI2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  for(const f of game.floats){
+    ctx.globalAlpha=Math.max(0,f.life);
+    ctx.fillStyle=f.color;
+    ctx.font='bold '+f.size+'px Segoe UI, Arial';
+    ctx.shadowBlur=6;ctx.shadowColor='rgba(0,0,0,.7)';
+    ctx.fillText(f.text,f.x,f.y);
+    ctx.shadowBlur=0;
+  }
+  ctx.globalAlpha=1;
+}
+
+// ==== LOOP ====
+function loop(now){
+  if(!game.playing){draw();return}
+  let dt=(now-game.lastTime)/1000;
+  if(!isFinite(dt)||dt<0)dt=0;
+  if(dt>0.05)dt=0.05;
+  game.lastTime=now;
+  try{
+    update(dt);
+    draw();
+  }catch(err){
+    ctx.fillStyle='#ff5555';ctx.font='16px Courier New';ctx.textAlign='center';
+    ctx.fillText('ERROR: '+err.message,W/2,H/2);
+    return;
+  }
+  game.rafId=requestAnimationFrame(loop);
+}
+function startLoop(){
+  if(game.rafId)cancelAnimationFrame(game.rafId);
+  game.lastTime=performance.now();
+  game.rafId=requestAnimationFrame(loop);
+}
+
+// ==== FLOW ====
+function startGame(diffIdx){
+  initAudio();
+  document.querySelectorAll('[data-diff]').forEach(b=>b.blur());
+  btnAgain.blur();
+  startMenu.classList.add('hidden');
+  overMenu.classList.add('hidden');
+
+  const d=DIFFS[diffIdx];
+  game.diff=diffIdx;
+  game.playing=true;
+  game.songTime=0;
+  game.beatInterval=60/d.bpm;
+  game.approach=game.beatInterval*2;
+  game.nextBeat=game.beatInterval; // первый бит чуть позже
+  game.beatCount=0;
+  game.jellies=[];game.particles=[];game.floats=[];game.bubbles=[];
+  game.score=0;game.combo=0;game.maxCombo=0;game.energy=50;
+  game.spawned=0;game.totalNotes=d.notes;
+  game.perfect=0;game.good=0;game.miss=0;
+  game.pulse=0;game.frameCount=0;
+
+  resize();
+  updateHUD();
+  startLoop();
+}
+
+function endSong(survived){
+  game.playing=false;
+  const total=game.perfect+game.good+game.miss;
+  const acc=total>0?(game.perfect+game.good*0.5)/total:0;
+
+  let grade='D';
+  if(!survived)grade='F';
+  else if(acc>=0.95&&game.miss===0)grade='S';
+  else if(acc>=0.85)grade='A';
+  else if(acc>=0.7)grade='B';
+  else if(acc>=0.5)grade='C';
+
+  const colors={S:'#ffd700',A:'#00e5ff',B:'#00ff9d',C:'#ce93d8',D:'#ff9955',F:'#ff5555'};
+  gradeVal.textContent=grade;
+  gradeVal.style.color=colors[grade];
+  gradeVal.style.textShadow='0 0 30px '+colors[grade];
+  overTitle.textContent=survived?'ТРЕК ЗАВЕРШЁН':'ЭНЕРГИЯ НА НУЛЕ';
+  finalScore.textContent=game.score;
+  stPerfect.textContent=game.perfect;
+  stGood.textContent=game.good;
+  stMiss.textContent=game.miss;
+  stCombo.textContent=game.maxCombo;
+
+  setTimeout(()=>overMenu.classList.remove('hidden'),400);
+}
+
+// ==== INPUT ====
+canvas.addEventListener('mousedown',function(e){tryHit(e.clientX,e.clientY)});
+canvas.addEventListener('touchstart',function(e){
+  e.preventDefault();
+  for(let i=0;i<e.changedTouches.length;i++){
+    tryHit(e.changedTouches[i].clientX,e.changedTouches[i].clientY);
+  }
+},{passive:false});
+
+document.querySelectorAll('[data-diff]').forEach(function(b){
+  b.addEventListener('click',function(){startGame(parseInt(b.dataset.diff,10))});
+});
+btnAgain.addEventListener('click',function(){startGame(game.diff)});
+
+resize();
+drawBackground();
+</script>
+</body>
+</html>
